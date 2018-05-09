@@ -84,6 +84,7 @@ void reboot(void) {
 
 void configModeCallback (WiFiManager *wifiManager) {
   DLG("Entered config mode");
+  led.Blink(200,20).Forever();  
   DLG(WiFi.softAPIP());
   DLG(wifiManager->getConfigPortalSSID());
 }
@@ -156,7 +157,7 @@ void setup() {
   led.Breathe(300).Forever();
   
   pinMode(HD_PIN, INPUT_PULLUP);
-  delay(1000);
+  delay(1200);
   bool goConfig = (digitalRead(HD_PIN)==LOW); //will go config portal in case of Flash pressed in first second
   pinMode(HD_PIN, OUTPUT);
   digitalWrite(HD_PIN, LOW);
@@ -175,23 +176,21 @@ void setup() {
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   wifiManager.setConfigPortalTimeout(120);
 
+  led.Blink(20,200).Forever();
   if (goConfig) {
     DLG("Wifi reset and go config");
-    led.Blink(200,20).Forever();
     wifiManager.resetSettings();
     wifiManager.startConfigPortal("CO2 Meter");
   } else {
     DLG("Wifi auto connect");
-    led.Blink(20,200).Forever();
     wifiManager.autoConnect("CO2 Meter");
   }
   
   DLG("Wifi Connected local IP:"+ WiFi.localIP());
   
   
-  //connect MQTT
+  //save MQTT
   led.Blink(200,200).Forever();
-  delay(1000);
   
   //read updated parameters
   strcpy(mqtt_server, custom_mqtt_server.getValue());
@@ -221,12 +220,13 @@ void setup() {
 
   delay(1000);
 
-  //connect mqtt
-
-  delay(1000);
   
+  //connect mqtt
+  //TODO:
+  
+  delay(1000);
   digitalWrite(HD_PIN, HIGH);
-  led.Breathe(2000).Forever();
+  led.Breathe(3000).Forever();
   DLG("Calibration Done");
   
   
