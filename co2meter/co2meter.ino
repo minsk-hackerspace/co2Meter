@@ -17,7 +17,9 @@ extern "C" { //timer
 
 #include <ArduinoOTA.h> //https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA
 
+#include <EEPROM.h>
 #include <FS.h>
+
 #include <SoftwareSerial.h> //Arduino lib SoftwareUART for MH-Z19
 
 #include <MHZ19.h>  //https://github.com/strange-v/MHZ19
@@ -181,13 +183,44 @@ void configModeCallback (WiFiManager *wifiManager) {
   DLG("AP:"+ap + " IP:" + ip);
   
 }
+
+WiFiClient espClient;
+
+/*
+ * 
+ * Config 
+ * 
+ */
+ 
 bool shouldSaveConfig = false;
 void saveConfigCallback () {
   DLG("Should save config");
   shouldSaveConfig = true;  
 }
 
-WiFiClient espClient;
+String readConfigValue(int addr) {
+    String str = String();
+    int address = addr;
+    while(address < 512) {
+      char c = char(EEPROM.read(address));
+      if (c != 0 && c != 255) {
+        str = str + c;
+      } else {
+        break;  
+      }
+      address ++;
+    }  
+    return str;
+}
+
+void writeConfigValue(int addr, String str) {
+  for(int i=0; i<str.length(); i++) {
+    EEPROM.write(addr+i,str[i]);
+  }
+  EEPROM.write(addr+str.length(),0);
+  EEPROM.commit();
+}
+
 
 /*
  * 
@@ -196,10 +229,19 @@ WiFiClient espClient;
  */
 
 char mqtt_server[40] = "io.adafruit.com";
+const int ADDR_mqtt_server = 200;
+
 char mqtt_port[6] = "1883";
+const int ADDR_mqtt_port = 250;
+
 char mqtt_user[40] = "user";
+const int ADDR_mqtt_user = 300;
+
 char mqtt_token[40] = "token_or_key";
-char mqtt_topic[40] = "topic/feed/name/";
+const int ADDR_mqtt_token = 350;
+
+char mqtt_topic[110] = "topic/feed/name/";
+const int ADDR_mqtt_topic = 400;
 
 PubSubClient mqtt(espClient);
 
@@ -262,7 +304,7 @@ bool mqttConnect(int retries) {
   return mqtt.connected();
 }
 
-void mqttPost(const char * stream , int value) {
+void mqttPost(const char * stream, int value) {
 
     if(WiFi.status() != WL_CONNECTED) {
       Serial.print("skip No Wi-Fi");
@@ -272,7 +314,7 @@ void mqttPost(const char * stream , int value) {
       String topic = String(mqtt_topic) + String(stream);
       String payload = String(value);
       bool ok = mqtt.publish(topic.c_str(), payload.c_str()); 
-      DLG("MQTT : Publish "+ topic + " | " + payload + "OK:" + String(ok));
+      DLG("MQTT : Publish "+ topic + " | " + payload + "  OK:" + String(ok));
     }
   }
 
@@ -346,16 +388,49 @@ void setup() {
       goConfig = false;
       DLG("Wifi start OTA");
   }
+
+  DLG("Read config");
+
+  EEPROM.begin(512);  
+  
+  String saved_mqtt_server = readConfigValue(ADDR_mqtt_server);
+  String saved_mqtt_port = readConfigValue(ADDR_mqtt_port);
+  String saved_mqtt_user = readConfigValue(ADDR_mqtt_user);
+  String saved_mqtt_token = readConfigValue(ADDR_mqtt_token);
+  String saved_mqtt_topic = readConfigValue(ADDR_mqtt_topic);
+
+  DLG("MQTT : Serv:" + saved_mqtt_server + ":" + saved_mqtt_port 
+  + " username:" + saved_mqtt_user + " key:" + saved_mqtt_token + " topic:" + saved_mqtt_topic);
+
+  if (saved_mqtt_server.length()) {
+    strcpy(mqtt_server, saved_mqtt_server.c_str());
+  }
+
+  if (saved_mqtt_port.length()) {
+    strcpy(mqtt_port, saved_mqtt_port.c_str());  
+  }
+  
+  if (saved_mqtt_user.length()) {
+    strcpy(mqtt_user, saved_mqtt_user.c_str());
+  }
+
+  if (saved_mqtt_token.length()) {
+    strcpy(mqtt_token, saved_mqtt_token.c_str());
+  }
+  
+  if (saved_mqtt_topic.length()) {
+    strcpy(mqtt_topic, saved_mqtt_topic.c_str());
+  }
+  
   
   //add wifimanager
   WiFiManager wifiManager;
   //add all your parameters here
-  
   WiFiManagerParameter custom_mqtt_server("mqtt_server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("mqtt_port", "mqtt port", mqtt_port, 6);
   WiFiManagerParameter custom_mqtt_user("mqtt_user", "user", mqtt_user, 40);  
   WiFiManagerParameter custom_mqtt_token("mqtt_token", "token_or_key", mqtt_token, 40);  
-  WiFiManagerParameter custom_mqtt_topic("mqtt_topic", "topic/feed/name/", mqtt_topic, 40);
+  WiFiManagerParameter custom_mqtt_topic("mqtt_topic", "topic/feed/name/", mqtt_topic, 110);
   
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
@@ -393,22 +468,29 @@ void setup() {
   //save the custom parameters to FS
   if (shouldSaveConfig) {
     DLG("saving config");
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& json = jsonBuffer.createObject();
-    json["mqtt_server"] = mqtt_server;
-    json["mqtt_port"] = mqtt_port;
-    json["mqtt_user"] = mqtt_user;
-    json["mqtt_token"] = mqtt_token;
-    json["mqtt_topic"] = mqtt_topic;
     
-    File configFile = SPIFFS.open("/config.json", "w");
-    if (!configFile) {
-      DLG("failed to open config file for writing");
+    String new_mqtt_server = String(mqtt_server);
+    String new_mqtt_port   = String(mqtt_port);
+    String new_mqtt_user   = String(mqtt_user);
+    String new_mqtt_token  = String(mqtt_token);
+    String new_mqtt_topic  = String(mqtt_topic);
+
+    if (new_mqtt_server.length()) {
+        writeConfigValue(ADDR_mqtt_server, new_mqtt_server);
+    }
+    if (new_mqtt_port.length()) {
+        writeConfigValue(ADDR_mqtt_port, new_mqtt_port);
+    }
+    if (new_mqtt_user.length()) {
+        writeConfigValue(ADDR_mqtt_user, new_mqtt_user);
+    }
+    if (new_mqtt_token.length()) {
+        writeConfigValue(ADDR_mqtt_token, new_mqtt_token);
+    }
+    if (new_mqtt_topic.length()) {
+        writeConfigValue(ADDR_mqtt_topic, new_mqtt_topic);
     }
 
-    json.printTo(Serial);
-    json.printTo(configFile);
-    configFile.close();
     //save
   }
 
