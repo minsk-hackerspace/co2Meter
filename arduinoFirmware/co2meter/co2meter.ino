@@ -116,17 +116,17 @@ const int measure_millis = 10000; //period between measurments in milliseconds
 
 
 /*
- * 
+ *
  * SATUS LED
- * 
+ *
  */
 JLed led = JLed(LED_PIN);//.LowActive();
 
 
 /*
- * 
+ *
  * Main Funcs
- * 
+ *
  */
 void reboot(void) {
   led.Blink(10,50).Forever();
@@ -137,76 +137,76 @@ void reboot(void) {
 
 
 /*
- * 
- * OTA 
- * 
+ *
+ * OTA
+ *
  */
 bool OTA = false;
 
 void setupOTA() {
-    
+
     DLG("Starting OTA");
 
     ArduinoOTA.setHostname("CO2 Meter OTA");
-    ArduinoOTA.onStart([]() { 
+    ArduinoOTA.onStart([]() {
                     Serial.println(" >> OTA onStart");
                     });
 
-    ArduinoOTA.onEnd([]() { 
+    ArduinoOTA.onEnd([]() {
                         Serial.println(" >> OTA onEnd");
                         });
 
-    ArduinoOTA.onError([](ota_error_t error) { 
+    ArduinoOTA.onError([](ota_error_t error) {
                       Serial.println(" >> OTA onError");
                       reboot();
                       });
 
-    led.Breathe(1000).Forever();                      
+    led.Breathe(1000).Forever();
     OTA = true;
    /* setup the OTA server */
     ArduinoOTA.begin();
 
     DLG("OTA ready");
-  
+
   }
 
 /*
- * 
- * WiFiManager 
- * 
+ *
+ * WiFiManager
+ *
  */
 void configModeCallback (WiFiManager *wifiManager) {
   DLG("Entered config portal mode");
-  led.Blink(400,100).Forever();  
-  
+  led.Blink(400,100).Forever();
+
   display.clear();
   display.drawString(0, 0, "Could not connect to Wi-Fi");
   display.drawString(0, 10, "Starting access point...");
   display.display();
   String ip = String(WiFi.softAPIP().toString());
   String ap = wifiManager->getConfigPortalSSID();
-  
-  
+
+
   display.drawString(20, 24, "SSID:"+ap);
   display.drawString(20, 34, "IP:"+ip);
   display.display();
-  
+
   DLG("AP:"+ap + " IP:" + ip);
-  
+
 }
 
 WiFiClient espClient;
 
 /*
- * 
- * Config 
- * 
+ *
+ * Config
+ *
  */
- 
+
 bool shouldSaveConfig = false;
 void saveConfigCallback () {
   DLG("Should save config");
-  shouldSaveConfig = true;  
+  shouldSaveConfig = true;
 }
 
 String readConfigValue(int addr) {
@@ -217,10 +217,10 @@ String readConfigValue(int addr) {
       if (c != 0 && c != 255) {
         str = str + c;
       } else {
-        break;  
+        break;
       }
       address ++;
-    }  
+    }
     return str;
 }
 
@@ -234,9 +234,9 @@ void writeConfigValue(int addr, String str) {
 
 
 /*
- * 
- * MQTT 
- * 
+ *
+ * MQTT
+ *
  */
 
 char mqtt_server[40] = "io.adafruit.com";
@@ -268,38 +268,38 @@ bool mqttConnect(int retries) {
   }
 
   if (mqtt.connected()) {
-    
+
     //DLG("MQTT : Connected");
     return true;
-    
+
   } else {
 
     DLG("MQTT : Connect , WIFI : " + String(WiFi.status()) );
 
     led.Blink(20,200).Forever();
-    
+
     String serv = String(mqtt_server);
-    
+
     int port = strtol(mqtt_port, NULL, 10);
 
     mqtt.setCallback(mqttCallback);
     mqtt.setServer(serv.c_str(), port);
-  
+
     DLG("MQTT : Connecting to :" + serv + ":" + String(port));
-    
+
     int attempt = 0;
-    
+
     while (!mqtt.connected() && attempt < retries ) {
-      
+
       // Create a random client ID
       String clientId = "CO2_Meter_";
       clientId += String(random(0xffffff), HEX); 
 
       String username = String(mqtt_user);
       String key = String(mqtt_token);
-      
+
       DLG("MQTT : Attempting connection using id:" + clientId + " username:" + username + " key:" + key);
-      
+
       // Attempt to connect
       if (mqtt.connect(clientId.c_str() ,username.c_str() , key.c_str() ) ) {
         DLG("MQTT : Connected : " + String(mqtt.state()) + " with retry " + String(attempt) );
@@ -325,12 +325,12 @@ void mqttPost(const char * stream, int value, int retries) {
   }
 
 /*
- * 
+ *
  * Routine Timer
- * 
+ *
  */
 os_timer_t myTimer;
- 
+
 void timerCallback(void *pArg) {
   led.Update();
 } // End of timerCallback
@@ -342,9 +342,9 @@ void timerInit(void) {
 
 
 /*
- * 
- * SETUP 
- * 
+ *
+ * SETUP
+ *
  */
 void setup() {
   Serial.begin(115200);
@@ -360,13 +360,13 @@ void setup() {
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0, 0, "CO2 Meter initializing...");
   display.display();
-  
+
   DLG("CO2: meter setup");
   pinMode(LED_BUILTIN, OUTPUT);
 
   led.On();
   pinMode(HD_PIN, INPUT_PULLUP);
-  
+
   bool goConfig = false;  //will go config portal in case of Flash pressed in first 1.5 second
   for (int i=0; i<15; i++) {
     delay(100);
@@ -376,9 +376,9 @@ void setup() {
       break;
     }
   }
-  
-  bool goOTA = true; //will start OTA in case of Flash pressed and hold for 3 sec 
-  led.Blink(10,500).Forever();  
+
+  bool goOTA = true; //will start OTA in case of Flash pressed and hold for 3 sec
+  led.Blink(10,500).Forever();
   for (int k=0; k<40; k++) {
     delay(100);
     if (digitalRead(HD_PIN)==HIGH) {
@@ -386,9 +386,9 @@ void setup() {
       break;
     }
   }
-  
+
   led.Off();
-  
+
   if (goOTA) {
       led.On();
       goConfig = false;
@@ -397,15 +397,15 @@ void setup() {
 
   DLG("Read config");
 
-  EEPROM.begin(512);  
-  
+  EEPROM.begin(512);
+
   String saved_mqtt_server = readConfigValue(ADDR_mqtt_server);
   String saved_mqtt_port = readConfigValue(ADDR_mqtt_port);
   String saved_mqtt_user = readConfigValue(ADDR_mqtt_user);
   String saved_mqtt_token = readConfigValue(ADDR_mqtt_token);
   String saved_mqtt_topic = readConfigValue(ADDR_mqtt_topic);
 
-  DLG("MQTT : Serv:" + saved_mqtt_server + ":" + saved_mqtt_port 
+  DLG("MQTT : Serv:" + saved_mqtt_server + ":" + saved_mqtt_port
   + " username:" + saved_mqtt_user + " key:" + saved_mqtt_token + " topic:" + saved_mqtt_topic);
 
   if (saved_mqtt_server.length()) {
@@ -413,9 +413,9 @@ void setup() {
   }
 
   if (saved_mqtt_port.length()) {
-    strcpy(mqtt_port, saved_mqtt_port.c_str());  
+    strcpy(mqtt_port, saved_mqtt_port.c_str());
   }
-  
+
   if (saved_mqtt_user.length()) {
     strcpy(mqtt_user, saved_mqtt_user.c_str());
   }
@@ -423,34 +423,34 @@ void setup() {
   if (saved_mqtt_token.length()) {
     strcpy(mqtt_token, saved_mqtt_token.c_str());
   }
-  
+
   if (saved_mqtt_topic.length()) {
     strcpy(mqtt_topic, saved_mqtt_topic.c_str());
   }
-  
-  
+
+
   //add wifimanager
   WiFiManager wifiManager;
   //add all your parameters here
   WiFiManagerParameter custom_mqtt_server("mqtt_server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("mqtt_port", "mqtt port", mqtt_port, 6);
-  WiFiManagerParameter custom_mqtt_user("mqtt_user", "user", mqtt_user, 40);  
-  WiFiManagerParameter custom_mqtt_token("mqtt_token", "token_or_key", mqtt_token, 40);  
+  WiFiManagerParameter custom_mqtt_user("mqtt_user", "user", mqtt_user, 40);
+  WiFiManagerParameter custom_mqtt_token("mqtt_token", "token_or_key", mqtt_token, 40);
   WiFiManagerParameter custom_mqtt_topic("mqtt_topic", "topic/feed/name/", mqtt_topic, 110);
-  
+
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
-  wifiManager.addParameter(&custom_mqtt_user);  
+  wifiManager.addParameter(&custom_mqtt_user);
   wifiManager.addParameter(&custom_mqtt_token);
-  wifiManager.addParameter(&custom_mqtt_topic);  
-  
+  wifiManager.addParameter(&custom_mqtt_topic);
+
   wifiManager.setMinimumSignalQuality(10);
   wifiManager.setAPCallback(configModeCallback);
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   wifiManager.setConfigPortalTimeout(60);
 
   led.Blink(10,100).Forever();
-  
+
   if (goConfig) {
     DLG("Wifi reset and go config");
     //wifiManager.resetSettings();
@@ -470,11 +470,11 @@ void setup() {
   strcpy(mqtt_user, custom_mqtt_user.getValue());
   strcpy(mqtt_token, custom_mqtt_token.getValue());
   strcpy(mqtt_topic, custom_mqtt_topic.getValue());
-  
+
   //save the custom parameters to FS
   if (shouldSaveConfig) {
     DLG("saving config");
-    
+
     String new_mqtt_server = String(mqtt_server);
     String new_mqtt_port   = String(mqtt_port);
     String new_mqtt_user   = String(mqtt_user);
@@ -509,7 +509,7 @@ void setup() {
   if(WiFi.status() == WL_CONNECTED) {
 
       DLG("Wifi Connected !");
-      
+
       display.drawString(0, 0, "Wi-Fi conected");
       display.drawString(0, 10, msg);
       display.display();
@@ -528,7 +528,7 @@ void setup() {
         display.drawString(0, 20, "Connecting to MQTT server");
         display.display();
         delay(100);
-        
+
         bool ok = mqttConnect(5);
 
         if (ok) {
@@ -536,19 +536,19 @@ void setup() {
         } else {
           display.drawString(0, 30, " - fail");
         }
-        
+
         display.display();
         delay(1000);
-    
+
       }
 
-      
+
     } else {
 
       DLG("Wifi offline mode !");
       //offline mode
       WiFi.mode(WIFI_OFF);
-      
+
       delay(100);
       display.drawString(0, 0, "Wi-Fi NOT Conected");
       display.display();
@@ -565,23 +565,23 @@ void setup() {
       display.drawString(0, 20, "     ...    ");
       display.display();
       delay(100);
-      
+
     }
 
   mySerial.begin(9600);
   dht.setup(DHT_PIN, DHTesp::DHT11);
-  
+
   delay(1000);
-  
+
   display.clear();
   display.display();
 
 // initial setup values
-  
+
   memset(ppms, 0, PPMS_L);
-  
+
   DLG("RUN !");
-  
+
 }
 
 
@@ -589,10 +589,10 @@ void displayDrawIcons() {
 
   //anten
   display.fillRect(111, 0, 1, 7);
-  display.fillRect(108, 0, 7, 1);  
-  display.fillRect(109, 1, 5, 1);  
+  display.fillRect(108, 0, 7, 1);
+  display.fillRect(109, 1, 5, 1);
   display.fillRect(110, 2, 3, 1);
-  
+
   if (WiFi.status() == WL_CONNECTED) { //connected wi-fi
     //palki
     display.fillRect(119, 1, 1, 6);
@@ -601,16 +601,16 @@ void displayDrawIcons() {
 
     if (mqtt.connected()) { //mqtt
         display.fillRect(124, 4, 3, 1);
-        display.fillRect(125, 3, 1, 3);        
+        display.fillRect(125, 3, 1, 3);
     } else {
         display.fillRect(124, 4, 3, 1);
     }
   } else {
-    display.setPixel(117, 4); 
+    display.setPixel(117, 4);
     display.setPixel(116, 5);
-    display.setPixel(116, 3);    
+    display.setPixel(116, 3);
     display.setPixel(118, 5);
-    display.setPixel(118, 3);    
+    display.setPixel(118, 3);
 
     display.setPixel(125, 4);
   }
@@ -620,40 +620,40 @@ void displayDrawIcons() {
 void displayPrintData() {
     // draw on display
 
-  
+
   String co2level = "CO  level:" + String(ppm) + " ";
   String co2levelAvg = "Avg:" + String(avg_ppm) + " ppm ";
   String templevel = "" + String(dht_temp) + "ºC " + String(dht_hum) + "%.";
-      
-  display.setTextAlignment(TEXT_ALIGN_LEFT);  
-  
+
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+
   display.setFont(ArialMT_Plain_16);
   display.drawString(0, 2, co2level);
   display.setFont(ArialMT_Plain_10);
   display.drawString(24, 8, "2");
   display.drawString(0, 20, co2levelAvg);
-  display.setTextAlignment(TEXT_ALIGN_RIGHT);  
+  display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.drawString(128, 20, templevel);
   display.drawString(128, 7, "ppm");
   display.drawString(128, 32, "2");
   display.drawString(128, 42, "1");
   display.drawString(128, 52, "0");
   //draw graph
-  
+
   for (int x = 0; x <= 120; x++) {
- 
+
        if (x%30 == 0) {
-          display.setPixel(x, 63);          
+          display.setPixel(x, 63);
        }
        if (x%5 == 0) {
           display.setPixel(x, 62);
        }
-       
+
   }
 
   display.fillRect(0, 61, 121, 1);
   display.fillRect(0, 51, 121, 1);
-  display.fillRect(0, 41, 121, 1);  
+  display.fillRect(0, 41, 121, 1);
 
   display.setColor(INVERSE);
   for (int i = 0; i<PPMS_L ; i++) {
@@ -662,7 +662,7 @@ void displayPrintData() {
     if (l_ppm != 0) {
       display.fillRect(120-i, 61-y, 1, y);
     } else {
-      display.setPixel(0, 61); 
+      display.setPixel(0, 61);
     }
   }
 
@@ -675,15 +675,15 @@ void displayRefresh()  {
 
   displayDrawIcons();
   displayPrintData();
-  
+
   display.display();
 
 }
 
 void measureDataMHZ() {
-  
+
   MHZ19_RESULT response = mhz.retrieveData();
-  
+
   if (response == MHZ19_RESULT_OK) {
     ppm = mhz.getCO2();
     temp = mhz.getTemperature();
@@ -693,7 +693,7 @@ void measureDataMHZ() {
     temp = 0;
     acc = -1;
   }
-  
+
   if (avg_ppm == 0 && ppm !=0) {
     avg_ppm = ppm;
   }
@@ -719,12 +719,12 @@ void measureDataDHT() {
 
   String msg = ">> DHT: " + String(dht.getStatusString()) + "\t temp:" + String(temperature) + "\t humn:" +  String(humidity);
   DLG(msg);
-  
+
 }
 
-  
+
 void postDataToMQTT() {
-    
+
   for (int i = 0 ; i<10 ; i++) {
       mqtt.loop();
       delay(5);
@@ -736,44 +736,44 @@ void postDataToMQTT() {
       delay(5);
   }
   mqttPost("co2temperature", temp, 0);
-  
+
   for (int i = 0 ; i<10 ; i++) {
       mqtt.loop();
       delay(5);
   }
   mqttPost("co2accuracy", acc, 0);
-  
+
   for (int i = 0 ; i<10 ; i++) {
       mqtt.loop();
       delay(5);
   }
 
   mqttPost("temperature", dht_temp, 0);
-  
+
   for (int i = 0 ; i<10 ; i++) {
       mqtt.loop();
       delay(5);
   }
 
   mqttPost("humidity", dht_hum, 0);
-  
+
   for (int i = 0 ; i<10 ; i++) {
       mqtt.loop();
       delay(5);
   }
 
-  
+
 }
 
 // the loop function runs over and over again forever
 void loop() {
 
   //TODO : IRQ
-  unsigned int before_loop_time = millis();  
+  unsigned int before_loop_time = millis();
 
   if (OTA) {
       ArduinoOTA.handle();
-      
+
       display.clear();
       display.setFont(ArialMT_Plain_10);
       display.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -790,7 +790,7 @@ void loop() {
   measureDataDHT();
 
   displayRefresh();
-    
+
   //status led
   int bval = 5000 - min(avg_ppm*2, 4400);
   led.Breathe(bval).Forever();
@@ -807,8 +807,8 @@ void loop() {
   }
   last_measured_time = cur_measure_time;
   measured_time = measured_time + measure_time_diff;
-  
-  if (measured_time > measure_period) { 
+
+  if (measured_time > measure_period) {
     //DLG("period");
     measured_time = measured_time - measure_period;
     avg_ppm = avg_ppm_summ / avg_measures;
@@ -820,34 +820,34 @@ void loop() {
 
     avg_ppm_summ = 0;
     avg_measures = 0;
-    
+
   } else {
-    
+
     unsigned int last_avg_ppm = ppms[0];
     if (last_avg_ppm) {
       avg_ppm = last_avg_ppm;
     } else {
-      avg_ppm = avg_ppm_summ / avg_measures;    
+      avg_ppm = avg_ppm_summ / avg_measures;
     }
 
   }
 
 
-  //timings 
+  //timings
   unsigned int diff = 0;
   unsigned int cur_loop_time = millis();
-  
+
   if (cur_loop_time > before_loop_time) {
     // OK
     diff = cur_loop_time - before_loop_time;
   } else {
     //overflow what to do??? should be near to average measure time;
-    diff = 1190; //average time for measurment 
+    diff = 1190; //average time for measurment
   }
 
   //DLG(millis());
-  //DLG(diff);    
+  //DLG(diff);
   delay(measure_millis-diff);
   //DLG(millis());
-  
+
 }
