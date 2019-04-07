@@ -37,12 +37,6 @@ extern "C" { //timer
 
 #include <PubSubClient.h> // https://github.com/knolleary/pubsubclient
 
-
-//for display
-#include <Wire.h>
-#include <SPI.h>
-#include "SH1106.h"   //https://github.com/rene-mt/esp8266-oled-sh1106
-
 //for DGT sensor
 #include "DHTesp.h" //https://github.com/beegee-tokyo/DHTesp
 DHTesp dht;
@@ -78,8 +72,9 @@ SoftwareSerial mySerial(SOFT_RX_PIN, SOFT_TX_PIN);
 MHZ19 mhz(&mySerial);
 
 #ifdef CONFIG_DISPLAY_SPI
-
 // SPI OLED display 128x64
+#include <SPI.h>
+#include "SH1106Spi.h"   // https://github.com/ThingPulse/esp8266-oled-ssd1306
 
 //hadware SPI - to OLED pins
 //const int OLED_CLK  = D5; //GPIO14 - CLK (D0)
@@ -88,16 +83,19 @@ MHZ19 mhz(&mySerial);
 const int OLED_CS     = D8; //GPIO15 - Chip select (CS)
 const int OLED_DC     = D2; //GPIO4  - Data/Command (DC)
 const int OLED_RESET  = 10; //GPIO10 SDD3 - RESET (RST)
-SH1106 display(true, OLED_RESET, OLED_DC, OLED_CS); // FOR SPI
+SH1106Spi display(OLED_RESET, OLED_DC, OLED_CS); // FOR SPI
 #endif
 
 #ifdef CONFIG_DISPLAY_I2C
+#include <Wire.h>
+#include "SH1106Wire.h"   // https://github.com/ThingPulse/esp8266-oled-ssd1306
+
 // I2C OLED display 128x64
 #define OLED_ADDR   0x3C
-//hadware I2C - to OLED pins
 const int OLED_SDA    = D7; //GPIO13 - SDA  (D1)
 const int OLED_SDC    = D5; //GPIO14 - CLK (D0)
-SH1106   display(OLED_ADDR, OLED_SDA, OLED_SDC);    // For I2C
+//hardware I2C - to OLED pins
+SH1106Wire   display(OLED_ADDR, OLED_SDA, OLED_SDC);    // For I2C
 #endif
 
 int ppm = 0; //Текущее значение уровня СО2
