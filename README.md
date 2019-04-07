@@ -1,4 +1,4 @@
-# co2Meter
+# C02 Meter
 ESP8266 + MZ-H19b + DHT11 + Oled1.3 = CO2 Meter
 
 # Result
@@ -25,3 +25,8 @@ ESP8266 + MZ-H19b + DHT11 + Oled1.3 = CO2 Meter
 ![](https://github.com/minsk-hackerspace/co2Meter/blob/master/images/DSC_0384.jpg)
 
 ![](https://github.com/minsk-hackerspace/co2Meter/blob/master/images/DSC_0390.jpg)
+
+
+# Licensed under WTFPL
+
+- http://www.wtfpl.net/
