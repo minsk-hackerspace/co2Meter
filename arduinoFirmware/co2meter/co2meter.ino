@@ -43,7 +43,9 @@ extern "C" { //timer
 #include <SPI.h>
 #include "SH1106.h"   //https://github.com/rene-mt/esp8266-oled-sh1106
 
-
+//for DGT sensor
+#include "DHTesp.h" //https://github.com/beegee-tokyo/DHTesp
+DHTesp dht;
 // comment for disable logging
 #define DEBUG
 
@@ -55,9 +57,13 @@ extern "C" { //timer
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
-//LED_BUILTIN = D0; //RAHD
+//const int LED_PIN = D0; //HADWARE LED
+const int LED_PIN = LED_BUILTIN; //HADWARE LED PIN D0
 
-const int HD_PIN = D3; // HARD
+const int HD_PIN = D3; //HARDWARE FLASH BTN
+//const int DHT_PIN = D3; //SHARED wit hardware flash button
+const int DHT_PIN = 9; //GPIO9 SDD2 SD2 Not available on some ESP (QIO mode)
+
 
 const int SOFT_TX_PIN = D4; //tx 
 const int SOFT_RX_PIN = D1; //rx
@@ -68,46 +74,53 @@ SoftwareSerial mySerial(SOFT_RX_PIN, SOFT_TX_PIN);
 MHZ19 mhz(&mySerial);
 
 
-//hadware SPI
-//D5 GPIO14   CLK    - CLK pin OLED display
-//D6 GPIO12   MISO   - not connected
-//D7 GPIO13   MOSI   - MOSI pin OLED display
-//some other pins for display 
-const int OLED_RESET  = 10;   // RESET
-const int OLED_DC     = D2;   // Data/Command
-const int OLED_CS     = D8;   // Chip select
-
 // SPI OLED display 128x64
+
+//hadware SPI - to OLED pins
+//const int OLED_CLK  = D5; //GPIO14 - CLK (D0)
+//const int OLED_MISO = D6; //GPIO12 - not connected
+//const int OLED_MOSI = D7; //GPIO13 - MOSI (D1)
+const int OLED_CS     = D8; //GPIO15 - Chip select (CS)
+const int OLED_DC     = D2; //GPIO4  - Data/Command (DC)
+const int OLED_RESET  = 10; //GPIO10 SDD3 - RESET (RST)
 SH1106 display(true, OLED_RESET, OLED_DC, OLED_CS); // FOR SPI
 
+
+// I2C OLED display 128x64
+//#define OLED_ADDR   0x3C
+//hadware I2C - to OLED pins
+//const int OLED_SDA    = D7; //GPIO13 - SDA  (D1)
+//const int OLED_SDC    = D5; //GPIO14 - CLK (D0)
+//SH1106   display(OLED_ADDR, OLED_SDA, OLED_SDC);    // For I2C
 
 int ppm = 0; //Текущее значение уровня СО2
 int temp = 0; //Текущее значение температуры
 int acc = 0; //Текущее значение точности
 
+int dht_temp = 0; //last measured Temperature from DHT
+int dht_hum = 0; //last measured Humidity from DHT
+
 #define PPMS_L 120
 int ppms[PPMS_L]= {};
 
 
-int avg_ppm = 0; //Среднее значение уровня СО2 за период 6 минут
+int avg_ppm = 0; //average СО2 level for period measure_period
 int avg_ppm_summ = 0; //measures summ
 int avg_measures = 0; //measures count
 
-unsigned long last_upd_time = 0;
+unsigned int last_measured_time = 0; //last measure timestamp
+unsigned int measured_time = 0; //measure time accumulator
+const unsigned int measure_period = 1000*60*2; //2 minutes
 
-unsigned int measured_time = 0;
-const unsigned int measure_period = 20000; //6 minutes
+const int measure_millis = 10000; //period between measurments in milliseconds
 
-const unsigned long avg_loop_time = 10000;
 
 /*
  * 
  * SATUS LED
  * 
  */
- 
-
-JLed led = JLed(LED_BUILTIN).LowActive();
+JLed led = JLed(LED_PIN);//.LowActive();
 
 
 /*
@@ -115,7 +128,6 @@ JLed led = JLed(LED_BUILTIN).LowActive();
  * Main Funcs
  * 
  */
- 
 void reboot(void) {
   led.Blink(10,50).Forever();
   DLG("Restarting...");
@@ -129,12 +141,11 @@ void reboot(void) {
  * OTA 
  * 
  */
-
 bool OTA = false;
 
 void setupOTA() {
     
-    Serial.println("Starting OTA");
+    DLG("Starting OTA");
 
     ArduinoOTA.setHostname("CO2 Meter OTA");
     ArduinoOTA.onStart([]() { 
@@ -154,7 +165,8 @@ void setupOTA() {
     OTA = true;
    /* setup the OTA server */
     ArduinoOTA.begin();
-    Serial.println("OTA ready");
+
+    DLG("OTA ready");
   
   }
 
@@ -163,7 +175,6 @@ void setupOTA() {
  * WiFiManager 
  * 
  */
-
 void configModeCallback (WiFiManager *wifiManager) {
   DLG("Entered config portal mode");
   led.Blink(400,100).Forever();  
@@ -252,19 +263,18 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 bool mqttConnect(int retries) {
 
   if(WiFi.status() != WL_CONNECTED) {
-    Serial.print("skip No Wi-Fi");
+    DLG("MQTT : Skip - No Wi-Fi");
     return false;
   }
 
   if (mqtt.connected()) {
     
-    DLG("MQTT : Connected");
+    //DLG("MQTT : Connected");
     return true;
     
   } else {
 
-    Serial.print("MQTT Connect , WIFI : ");
-    Serial.println(WiFi.status());
+    DLG("MQTT : Connect , WIFI : " + String(WiFi.status()) );
 
     led.Blink(20,200).Forever();
     
@@ -304,13 +314,9 @@ bool mqttConnect(int retries) {
   return mqtt.connected();
 }
 
-void mqttPost(const char * stream, int value) {
+void mqttPost(const char * stream, int value, int retries) {
 
-    if(WiFi.status() != WL_CONNECTED) {
-      Serial.print("skip No Wi-Fi");
-    }
-
-    if (mqttConnect(5)) {
+    if (mqttConnect(retries)) {
       String topic = String(mqtt_topic) + String(stream);
       String payload = String(value);
       bool ok = mqtt.publish(topic.c_str(), payload.c_str()); 
@@ -441,7 +447,7 @@ void setup() {
   wifiManager.setMinimumSignalQuality(10);
   wifiManager.setAPCallback(configModeCallback);
   wifiManager.setSaveConfigCallback(saveConfigCallback);
-  wifiManager.setConfigPortalTimeout(120);
+  wifiManager.setConfigPortalTimeout(60);
 
   led.Blink(10,100).Forever();
   
@@ -494,9 +500,6 @@ void setup() {
     //save
   }
 
-
-
-
   display.clear();
   display.display();
   DLG("Wifi Connected ? ");
@@ -505,28 +508,28 @@ void setup() {
 
   if(WiFi.status() == WL_CONNECTED) {
 
+      DLG("Wifi Connected !");
+      
       display.drawString(0, 0, "Wi-Fi conected");
       display.drawString(0, 10, msg);
-
+      display.display();
 
       if (goOTA) {
-        display.display();
+        //starting OTA
         delay(100);
         display.drawString(0, 20, "Starting OTA ...");
         display.display();
-        delay(100);
-        display.drawString(0, 30, "   Waiting for update");
-        display.display();
-        delay(100);
+        delay(500);
         setupOTA();
       } else {
 
         //connect MQTT
+        delay(100);
         display.drawString(0, 20, "Connecting to MQTT server");
         display.display();
         delay(100);
         
-        bool ok = mqttConnect(10);
+        bool ok = mqttConnect(5);
 
         if (ok) {
           display.drawString(0, 30, " + connected");
@@ -541,6 +544,10 @@ void setup() {
 
       
     } else {
+
+      DLG("Wifi offline mode !");
+      //offline mode
+      WiFi.mode(WIFI_OFF);
       
       delay(100);
       display.drawString(0, 0, "Wi-Fi NOT Conected");
@@ -562,7 +569,8 @@ void setup() {
     }
 
   mySerial.begin(9600);
-
+  dht.setup(DHT_PIN, DHTesp::DHT11);
+  
   delay(1000);
   
   display.clear();
@@ -572,12 +580,10 @@ void setup() {
   
   memset(ppms, 0, PPMS_L);
   
-  last_upd_time = millis();
+  DLG("RUN !");
   
 }
 
-
-const int measure_millis = 10000;
 
 void displayDrawIcons() {
 
@@ -617,7 +623,7 @@ void displayPrintData() {
   
   String co2level = "CO  level:" + String(ppm) + " ";
   String co2levelAvg = "Avg:" + String(avg_ppm) + " ppm ";
-  String templevel = "Temp:" + String(temp) + "ºC.";
+  String templevel = "" + String(dht_temp) + "ºC " + String(dht_hum) + "%.";
       
   display.setTextAlignment(TEXT_ALIGN_LEFT);  
   
@@ -636,7 +642,7 @@ void displayPrintData() {
   
   for (int x = 0; x <= 120; x++) {
  
-       if (x%10 == 0) {
+       if (x%30 == 0) {
           display.setPixel(x, 63);          
        }
        if (x%5 == 0) {
@@ -660,10 +666,17 @@ void displayPrintData() {
     }
   }
 
-  display.display();
+}
 
-  //log data 
-  DLG(co2level+co2levelAvg+templevel+"acc:"+String(acc));
+void displayRefresh()  {
+
+  display.clear();
+  display.setColor(WHITE);
+
+  displayDrawIcons();
+  displayPrintData();
+  
+  display.display();
 
 }
 
@@ -688,89 +701,115 @@ void measureDataMHZ() {
 
   avg_ppm_summ = avg_ppm_summ + ppm;
   avg_measures ++;
+
+  String msg = ">> CO2 level:" + String(ppm) + " \t AVG:" + String(avg_ppm) + "\t temp:" + String(temp) +"\t acc:"+String(acc);
+  DLG(msg);
 }
 
-void postDataToMQTT() {
-  //post to MQTT only cottect values
-  if (acc != -1 ) {
-    
-    for (int i = 0 ; i<10 ; i++) {
-        mqtt.loop();
-        delay(5);
-    }
-    mqttPost("co2ppm", ppm);
+void measureDataDHT() {
 
-    for (int i = 0 ; i<10 ; i++) {
-        mqtt.loop();
-        delay(5);
-    }
-    mqttPost("temperature", temp);
-    
-    for (int i = 0 ; i<10 ; i++) {
-        mqtt.loop();
-        delay(5);
-    }
-    mqttPost("accuracy", acc);
-    
-    for (int i = 0 ; i<10 ; i++) {
-        mqtt.loop();
-        delay(5);
-    }
-    
-  } else {
-    
-     for (int i = 0 ; i<30 ; i++) {
-        mqtt.loop();
-        delay(5);
-    }  
+  float humidity = dht.getHumidity();
+  float temperature = dht.getTemperature();
+
+  if (dht.getStatus() == 0) {
+
+    dht_temp = (int) temperature;
+    dht_hum = (int) humidity;
   }
+
+  String msg = ">> DHT: " + String(dht.getStatusString()) + "\t temp:" + String(temperature) + "\t humn:" +  String(humidity);
+  DLG(msg);
+  
+}
+
+  
+void postDataToMQTT() {
+    
+  for (int i = 0 ; i<10 ; i++) {
+      mqtt.loop();
+      delay(5);
+  }
+  mqttPost("co2ppm", ppm, 3);
+
+  for (int i = 0 ; i<10 ; i++) {
+      mqtt.loop();
+      delay(5);
+  }
+  mqttPost("co2temperature", temp, 0);
+  
+  for (int i = 0 ; i<10 ; i++) {
+      mqtt.loop();
+      delay(5);
+  }
+  mqttPost("co2accuracy", acc, 0);
+  
+  for (int i = 0 ; i<10 ; i++) {
+      mqtt.loop();
+      delay(5);
+  }
+
+  mqttPost("temperature", dht_temp, 0);
+  
+  for (int i = 0 ; i<10 ; i++) {
+      mqtt.loop();
+      delay(5);
+  }
+
+  mqttPost("humidity", dht_hum, 0);
+  
+  for (int i = 0 ; i<10 ; i++) {
+      mqtt.loop();
+      delay(5);
+  }
+
   
 }
 
 // the loop function runs over and over again forever
 void loop() {
 
+  //TODO : IRQ
+  unsigned int before_loop_time = millis();  
+
   if (OTA) {
       ArduinoOTA.handle();
-      delay(1);
+      
+      display.clear();
+      display.setFont(ArialMT_Plain_10);
+      display.setTextAlignment(TEXT_ALIGN_LEFT);
+      display.drawString(10, 10, "CO2 Meter OTA...");
+      String ip = " IP: " + WiFi.localIP().toString();
+      display.drawString(10, 20, ip);
+      display.display();
+
       return;
   }
-  
-  display.clear();
-  display.setColor(WHITE);
 
-  mqtt.loop();
 
-  displayDrawIcons();
   measureDataMHZ();
-  
-  displayPrintData();
-  postDataToMQTT();
-  mqtt.loop();
+  measureDataDHT();
 
+  displayRefresh();
+    
   //status led
   int bval = 5000 - min(avg_ppm*2, 4400);
   led.Breathe(bval).Forever();
-  
-  //timings
-  
-  unsigned int cur_time = millis();
-  unsigned int diff = 0;
-  
-  if (last_upd_time < cur_time) {
-    // OK
-    diff = cur_time - last_upd_time;
-    last_upd_time = cur_time;
+
+  postDataToMQTT();
+
+  //time measure
+  unsigned int cur_measure_time = millis();
+  unsigned int measure_time_diff = 0;
+  if (last_measured_time == 0 || cur_measure_time < last_measured_time) {
+    measure_time_diff = measure_millis;//should be near this value
   } else {
-    //overflow  what to do??? should be near measure_millis;
-    diff = measure_millis;
-    last_upd_time = cur_time;
+    measure_time_diff = cur_measure_time - last_measured_time;
   }
-  
-  measured_time = measured_time + diff;
+  last_measured_time = cur_measure_time;
+  measured_time = measured_time + measure_time_diff;
   
   if (measured_time > measure_period) { 
-    DLG("period");
+    //DLG("period");
     measured_time = measured_time - measure_period;
     avg_ppm = avg_ppm_summ / avg_measures;
     //write avg to buffer;
@@ -792,9 +831,23 @@ void loop() {
     }
 
   }
-  
-  DLG(diff);  
-  
-  delay(measure_millis-54);      //54 millis is avg time for this loop
 
+
+  //timings 
+  unsigned int diff = 0;
+  unsigned int cur_loop_time = millis();
+  
+  if (cur_loop_time > before_loop_time) {
+    // OK
+    diff = cur_loop_time - before_loop_time;
+  } else {
+    //overflow what to do??? should be near to average measure time;
+    diff = 1190; //average time for measurment 
+  }
+
+  //DLG(millis());
+  //DLG(diff);    
+  delay(measure_millis-diff);
+  //DLG(millis());
+  
 }
