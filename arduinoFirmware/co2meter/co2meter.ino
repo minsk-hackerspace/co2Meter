@@ -46,7 +46,11 @@ extern "C" { //timer
 //for DGT sensor
 #include "DHTesp.h" //https://github.com/beegee-tokyo/DHTesp
 DHTesp dht;
-// comment for disable logging
+
+#define CONFIG_DISPLAY_SPI
+//#define CONFIG_DISPLAY_I2C
+
+// comment this for disable logging
 #define DEBUG
 
 #ifdef DEBUG
@@ -73,6 +77,7 @@ SoftwareSerial mySerial(SOFT_RX_PIN, SOFT_TX_PIN);
 
 MHZ19 mhz(&mySerial);
 
+#ifdef CONFIG_DISPLAY_SPI
 
 // SPI OLED display 128x64
 
@@ -84,14 +89,16 @@ const int OLED_CS     = D8; //GPIO15 - Chip select (CS)
 const int OLED_DC     = D2; //GPIO4  - Data/Command (DC)
 const int OLED_RESET  = 10; //GPIO10 SDD3 - RESET (RST)
 SH1106 display(true, OLED_RESET, OLED_DC, OLED_CS); // FOR SPI
+#endif
 
-
+#ifdef CONFIG_DISPLAY_I2C
 // I2C OLED display 128x64
-//#define OLED_ADDR   0x3C
+#define OLED_ADDR   0x3C
 //hadware I2C - to OLED pins
-//const int OLED_SDA    = D7; //GPIO13 - SDA  (D1)
-//const int OLED_SDC    = D5; //GPIO14 - CLK (D0)
-//SH1106   display(OLED_ADDR, OLED_SDA, OLED_SDC);    // For I2C
+const int OLED_SDA    = D7; //GPIO13 - SDA  (D1)
+const int OLED_SDC    = D5; //GPIO14 - CLK (D0)
+SH1106   display(OLED_ADDR, OLED_SDA, OLED_SDC);    // For I2C
+#endif
 
 int ppm = 0; //Текущее значение уровня СО2
 int temp = 0; //Текущее значение температуры
