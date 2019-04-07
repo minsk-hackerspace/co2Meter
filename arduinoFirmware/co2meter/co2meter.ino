@@ -17,13 +17,13 @@ extern "C" { //timer
 
 #include <ArduinoOTA.h> //https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA
 
-#include <EEPROM.h>
-#include <FS.h>
+#include <EEPROM.h> //Arduino lib for EEPROM
+#include <FS.h> //https://github.com/esp8266/Arduino
 
 #include <SoftwareSerial.h> //Arduino lib SoftwareUART for MH-Z19
 
 #include <MHZ19.h>  //https://github.com/strange-v/MHZ19
-#include <MHZ19PWM.h>
+#include <MHZ19PWM.h> //https://github.com/strange-v/MHZ19
 
 
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
