@@ -28,6 +28,8 @@ ESP8266 + MZ-H19b + DHT11 + Oled1.3 = CO2 Meter
 
 ![](https://github.com/minsk-hackerspace/co2Meter/blob/master/images/DSC_0420.jpg)
 
+# HomeAssistant
+Using esphome, in `./esphomeFirmware`.
 
 # Licensed under WTFPL
 
