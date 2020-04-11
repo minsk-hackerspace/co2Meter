@@ -31,6 +31,8 @@ ESP8266 + MZ-H19b + DHT11 + Oled1.3 = CO2 Meter
 # HomeAssistant
 Using esphome, in `./esphomeFirmware`.
 
+![](https://github.com/kabbi/co2Meter/blob/esphome/images/hass-screenshot.png)
+
 # Licensed under WTFPL
 
 - http://www.wtfpl.net/
